@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -13,6 +14,10 @@ import (
 )
 
 func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8253"
+	}
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -89,8 +94,8 @@ func main() {
 		// Setup API routes
 		api.SetupRoutes(router)
 
-		log.Printf("API Server starting on port 8253...")
-		if err := router.Run(":8253"); err != nil {
+		log.Printf("API Server starting on port %s...", port)
+		if err := router.Run(":" + port); err != nil {
 			log.Printf("Failed to start API server: %v", err)
 		}
 	}()
