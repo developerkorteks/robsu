@@ -63,6 +63,8 @@ func handleMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 			sendProductList(bot, chatID, 0)
 		case "help":
 			showHelp(bot, chatID)
+		case "rules":
+			sendRulesMessage(bot, chatID)
 		case "admin":
 			handleAdminCommand(bot, message)
 		case "stats":
@@ -157,6 +159,12 @@ func handleCallbackQuery(bot *tgbotapi.BotAPI, cq *tgbotapi.CallbackQuery) {
 		sendProductList(bot, chatID, 0)
 	} else if data == "help" {
 		showHelp(bot, chatID)
+	} else if data == "balance" {
+		handleBalanceCommand(bot, chatID)
+	} else if data == "rules" {
+		sendRulesMessage(bot, chatID)
+	} else if data == "history" {
+		handleHistoryCommandNew(bot, chatID)
 	} else if data == "contact_admin" {
 		handleContactAdmin(bot, chatID)
 	} else if data == "proceed_payment" {
@@ -183,6 +191,48 @@ func handleCallbackQuery(bot *tgbotapi.BotAPI, cq *tgbotapi.CallbackQuery) {
 	} else if strings.HasPrefix(data, "send_broadcast:") {
 		broadcastMessage := strings.TrimPrefix(data, "send_broadcast:")
 		handleSendBroadcast(bot, chatID, broadcastMessage)
+	} else if strings.HasPrefix(data, "topup:") {
+		amountStr := strings.TrimPrefix(data, "topup:")
+		if amountStr == "custom" {
+			setUserState(chatID, "waiting_topup_amount")
+			text := `╔══════════════════════════╗
+║     💳 *TOP UP SALDO*    ║
+╚══════════════════════════╝
+
+💰 *Masukkan Nominal Custom*
+
+Silakan ketik nominal top up yang Anda inginkan.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 *KETENTUAN:*
+• 💵 Minimum: Rp 10.000
+• 💎 Maximum: Rp 1.000.000
+• ⚠️ Hanya angka (tanpa titik/koma)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 *CONTOH INPUT:*
+• Untuk Rp 50.000 → ketik: *50000*
+• Untuk Rp 100.000 → ketik: *100000*
+• Untuk Rp 250.000 → ketik: *250000*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ *Pembayaran via QRIS - Aman & Cepat*
+
+🔤 *Ketik nominal sekarang:*`
+
+			msg := tgbotapi.NewMessage(chatID, text)
+			msg.ParseMode = "Markdown"
+			if _, err := bot.Send(msg); err != nil {
+				log.Printf("Error sending custom topup message: %v", err)
+			}
+		} else {
+			_, err := strconv.ParseInt(amountStr, 10, 64)
+			if err != nil {
+				sendErrorMessage(bot, chatID, "❌ Nominal tidak valid.")
+				return
+			}
+			handleTopUpAmountInput(bot, chatID, amountStr, &tgbotapi.User{ID: chatID})
+		}
 	} else if data == "logout" {
 		handleLogout(bot, chatID)
 	} else if strings.HasPrefix(data, "pay:") {
@@ -226,28 +276,56 @@ func handleCallbackQuery(bot *tgbotapi.BotAPI, cq *tgbotapi.CallbackQuery) {
 func handleStart(bot *tgbotapi.BotAPI, chatID int64) {
 	clearUserState(chatID)
 
-	text := `🏪 *Selamat Datang di GRN Store!*
+	text := `╔══════════════════════════╗
+║    🌟 *GRN STORE* 🌟     ║
+║   *Premium Digital Store*  ║
+╚══════════════════════════╝
 
-Halo! Terima kasih telah menggunakan layanan kami.
-GRN Store adalah toko terpercaya untuk kebutuhan paket data dan kuota internet Anda.
+🎯 *SELAMAT DATANG!*
+Terima kasih telah memilih GRN Store sebagai partner digital Anda!
 
-✨ *Fitur Unggulan:*
-• 📱 Paket data semua operator
-• ⚡ Proses cepat & otomatis  
-• 🔒 Transaksi aman & terpercaya
-• 💰 Harga kompetitif
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🛍️ *LAYANAN TERSEDIA:*
+• 📱 Pulsa & Paket Data All Operator
+• 🎮 Voucher Game & E-Sports
+• 💳 Top Up E-Wallet (DANA, OVO, dll)
+• 🔥 Promo Spesial Setiap Hari
 
-Silakan pilih menu di bawah untuk memulai:`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 *CARA PEMBELIAN:*
+1️⃣ Pilih produk yang diinginkan
+2️⃣ Masukkan nomor tujuan dengan benar
+3️⃣ Pilih metode pembayaran (QRIS/E-Wallet)
+4️⃣ Selesaikan pembayaran sesuai instruksi
+5️⃣ Produk otomatis masuk dalam 1-5 menit
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✨ *KEUNGGULAN KAMI:*
+🚀 Proses otomatis 24/7
+💰 Harga terjangkau & kompetitif  
+🔒 Transaksi aman & terpercaya
+⚡ Pengisian super cepat
+🎯 Customer service responsif
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ *PENTING:* Baca /rules sebelum bertransaksi
+
+🚀 *Siap berbelanja? Klik tombol di bawah!*`
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📱 Lihat Produk", "products"),
+			tgbotapi.NewInlineKeyboardButtonData("🛍️ Mulai Belanja", "main_menu"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📞 Verifikasi Nomor", "verify_phone"),
+			tgbotapi.NewInlineKeyboardButtonData("💰 Cek Saldo", "balance"),
+			tgbotapi.NewInlineKeyboardButtonData("💳 Top Up Saldo", "topup"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("ℹ️ Bantuan", "help"),
+			tgbotapi.NewInlineKeyboardButtonData("📜 Riwayat", "history"),
+			tgbotapi.NewInlineKeyboardButtonData("📋 Peraturan", "rules"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❓ Bantuan", "help"),
 		),
 	)
 
@@ -1010,16 +1088,30 @@ Silakan pilih metode pembayaran yang Anda inginkan:`, p.Name, formatPrice(p.Pric
 func handleTopUpRequest(bot *tgbotapi.BotAPI, chatID int64) {
 	setUserState(chatID, "waiting_topup_amount")
 
-	text := `💰 *Top Up Saldo GRN Store*
+	text := `╔══════════════════════════╗
+║     💳 *TOP UP SALDO*    ║
+╚══════════════════════════╝
 
-Silakan masukkan nominal top up yang Anda inginkan.
+💰 *Masukkan Nominal Custom*
 
-*Minimal top up:* Rp 10.000
-*Maksimal top up:* Rp 1.000.000
+Silakan ketik nominal top up yang Anda inginkan.
 
-*Contoh:* 50000
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 *KETENTUAN:*
+• 💵 Minimum: Rp 10.000
+• 💎 Maximum: Rp 1.000.000
+• ⚠️ Hanya angka (tanpa titik/koma)
 
-Ketik nominal top up (tanpa titik atau koma):`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 *CONTOH INPUT:*
+• Untuk Rp 50.000 → ketik: *50000*
+• Untuk Rp 100.000 → ketik: *100000*
+• Untuk Rp 250.000 → ketik: *250000*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ *Pembayaran via QRIS - Aman & Cepat*
+
+🔤 *Ketik nominal sekarang:*`
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -2089,22 +2181,18 @@ func handleQRISPayment(bot *tgbotapi.BotAPI, chatID int64, purchaseResp *dto.Pur
 	text := fmt.Sprintf(`💳 *Pembayaran QRIS*
 
 📦 *Produk:* %s
-💰 *Harga:* %s
 🆔 *Transaction ID:* %s
 ⏰ *Berlaku sampai:* %d detik
 
 *Cara Pembayaran:*
 1️⃣ Scan QR code di atas dengan aplikasi e-wallet
-2️⃣ Pastikan nominal sesuai: %s
-3️⃣ Lakukan pembayaran
-4️⃣ Paket akan otomatis aktif setelah pembayaran berhasil
+2️⃣ Lakukan pembayaran sesuai nominal yang tertera
+3️⃣ Paket akan otomatis aktif setelah pembayaran berhasil
 
 ⚠️ *Penting:* QR code akan expired dalam %d detik. Segera lakukan pembayaran!`,
 		purchaseResp.Data.PackageName,
-		formatPrice(purchaseResp.Data.PackageProcessingFee),
 		purchaseResp.Data.TrxID,
 		qrisData.RemainingTime,
-		formatPrice(purchaseResp.Data.PackageProcessingFee),
 		qrisData.RemainingTime)
 
 	photoMsg.Caption = text
@@ -2185,7 +2273,6 @@ func handleDeeplinkPayment(bot *tgbotapi.BotAPI, chatID int64, purchaseResp *dto
 	text := fmt.Sprintf(`💳 *Pembayaran %s*
 
 📦 *Produk:* %s
-💰 *Harga:* %s
 🆔 *Transaction ID:* %s
 
 *Cara Pembayaran:*
@@ -2197,7 +2284,6 @@ func handleDeeplinkPayment(bot *tgbotapi.BotAPI, chatID int64, purchaseResp *dto
 ⚠️ *Penting:* Pastikan Anda memiliki saldo yang cukup di aplikasi %s.`,
 		paymentMethod,
 		purchaseResp.Data.PackageName,
-		formatPrice(purchaseResp.Data.PackageProcessingFee),
 		purchaseResp.Data.TrxID,
 		paymentMethod,
 		paymentMethod,
@@ -2795,4 +2881,143 @@ func handleTransactionDetail(bot *tgbotapi.BotAPI, chatID int64, transactionID s
 		log.Printf("Error sending transaction detail: %v", err)
 		sendErrorMessage(bot, chatID, "Maaf, terjadi kesalahan saat menampilkan detail.")
 	}
+}
+
+// New professional functions
+func sendRulesMessage(bot *tgbotapi.BotAPI, chatID int64) {
+	text := `╔══════════════════════════╗
+║    📋 *PERATURAN BOT*    ║
+╚══════════════════════════╝
+
+ᴘᴇʀᴀᴛᴜʀᴀɴ ʙᴏᴛ
+1. ✧ ᴅɪʟᴀʀᴀɴɢ sᴘᴀᴍ ʙᴏᴛ
+2. ✧ ʙᴏᴛ ᴅɪᴀᴍ? ᴄᴏʙᴀ ʟᴀɢɪ sᴇᴛᴇʟᴀʜ ᴅᴇʟᴀʏ.  
+3. ✧ ᴘᴀsᴛɪᴋᴀɴ ɴᴏᴍᴏʀ / ɪᴅ sᴜᴅᴀʜ ʙᴇɴᴀʀ.  
+4. ✧ ᴅᴏʀ ɪɴᴛᴇʀɴᴇᴛ ᴛᴀɴᴘᴀ ɢᴀʀᴀɴsɪ.  
+5. ✧ ᴍᴇɴᴊᴜᴀʟ VPN ʙᴜᴋᴀɴ ᴄᴏɴꜰɪɢ.  
+6. ✧ ᴠɪʀᴛᴇx / ʙᴜɢ ᴅɪʟᴀʀᴀɴɢ
+7. ✧ ᴛᴇʟᴘᴏɴ ʙᴏᴛ = ʙʟᴏᴋɪʀ ᴘᴇʀᴍᴀɴᴇɴ.  
+8. ✧ ᴇʀʀᴏʀ? ʟᴀᴘᴏʀ ᴏᴡɴᴇʀ.  
+9. ✧ ʙᴏᴛ ʟᴀᴍʙᴀᴛ? ᴊᴀɴɢᴀɴ sᴘᴀᴍ.  
+10. ✧ ᴏʀᴅᴇʀ VPN / ᴘʀᴏᴅᴜᴋ ʟᴀɪɴ: ʜᴜʙᴜɴɢɪ ᴏᴡɴᴇʀ
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ *PENTING:*
+• Dengan menggunakan bot ini, Anda setuju dengan semua peraturan di atas
+• Pelanggaran dapat mengakibatkan pemblokiran permanen
+• Untuk pertanyaan lebih lanjut, hubungi admin
+
+🏪 *GRN Store - Terpercaya & Profesional*`
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🏠 Menu Utama", "main_menu"),
+			tgbotapi.NewInlineKeyboardButtonData("❓ Bantuan", "help"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending rules message: %v", err)
+	}
+}
+
+
+func handleTopUpCommand(bot *tgbotapi.BotAPI, chatID int64) {
+	text := `╔══════════════════════════╗
+║     💳 *TOP UP SALDO*    ║
+╚══════════════════════════╝
+
+💰 *Pilih Nominal Top Up:*
+
+🔥 *PAKET HEMAT:*
+• Rp 10.000 - Untuk pembelian kecil
+• Rp 25.000 - Paket populer ⭐
+• Rp 50.000 - Hemat lebih banyak
+
+💎 *PAKET PREMIUM:*
+• Rp 100.000 - Bonus ekstra
+• Rp 250.000 - Super hemat
+• Rp 500.000 - Untuk reseller
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 *Cara Top Up:*
+1️⃣ Pilih nominal di bawah
+2️⃣ Scan QRIS yang muncul
+3️⃣ Bayar sesuai nominal
+4️⃣ Saldo otomatis masuk 1-5 menit
+
+⚡ *Pembayaran via QRIS - Aman & Cepat*`
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💰 Rp 10.000", "topup:10000"),
+			tgbotapi.NewInlineKeyboardButtonData("💰 Rp 25.000", "topup:25000"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💰 Rp 50.000", "topup:50000"),
+			tgbotapi.NewInlineKeyboardButtonData("💰 Rp 100.000", "topup:100000"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💰 Rp 250.000", "topup:250000"),
+			tgbotapi.NewInlineKeyboardButtonData("💰 Rp 500.000", "topup:500000"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("✏️ Nominal Lain", "topup:custom"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🏠 Menu Utama", "main_menu"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending topup message: %v", err)
+	}
+}
+
+func handleHistoryCommandNew(bot *tgbotapi.BotAPI, chatID int64) {
+	history, err := service.GetUserPurchaseHistory(chatID)
+	if err != nil {
+		log.Printf("Error getting purchase history: %v", err)
+		sendErrorMessage(bot, chatID, "❌ Gagal mengambil riwayat transaksi.")
+		return
+	}
+	
+	if len(history) == 0 {
+		text := `╔══════════════════════════╗
+║    📜 *RIWAYAT KOSONG*   ║
+╚══════════════════════════╝
+
+🔍 *Belum Ada Transaksi*
+
+Anda belum melakukan transaksi apapun.
+Mulai berbelanja sekarang untuk melihat riwayat transaksi Anda!
+
+🛍️ *Yuk mulai belanja!*`
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🛍️ Mulai Belanja", "main_menu"),
+			),
+		)
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+		msg.ReplyMarkup = keyboard
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending empty history message: %v", err)
+		}
+		return
+	}
+
+	handleHistoryCommand(bot, chatID)
 }

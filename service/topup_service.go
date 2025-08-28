@@ -69,6 +69,11 @@ func CreateTopUpTransaction(userID int64, username string, amount int64) (*dto.T
 	Transactions[transactionID] = transaction
 	TxMutex.Unlock()
 
+	// Sync to database
+	if err := SyncTransactionToDatabase(transaction); err != nil {
+		log.Printf("Warning: Failed to sync transaction to database: %v", err)
+	}
+
 	// Debug log
 	log.Printf("Transaction created: ID=%s, UserID=%d, Amount=%d", transactionID, userID, amount)
 
@@ -149,6 +154,11 @@ func ConfirmTopUp(transactionID string, adminID int64) error {
 	tx.ApprovedBy = adminID
 	tx.ApprovedAt = time.Now().Format("2006-01-02 15:04:05")
 
+	// Sync to database
+	if err := SyncTransactionToDatabase(tx); err != nil {
+		log.Printf("Warning: Failed to sync transaction to database: %v", err)
+	}
+
 	// Update user balance using AddUserBalance function
 	err = AddUserBalance(tx.UserID, tx.Amount)
 	if err != nil {
@@ -182,6 +192,11 @@ func RejectTopUp(transactionID string, adminID int64) error {
 	tx.Status = "rejected"
 	tx.ApprovedBy = adminID
 	tx.ApprovedAt = time.Now().Format("2006-01-02 15:04:05")
+
+	// Sync to database
+	if err := SyncTransactionToDatabase(tx); err != nil {
+		log.Printf("Warning: Failed to sync transaction to database: %v", err)
+	}
 
 	return nil
 }
@@ -346,4 +361,87 @@ func GetAllUserIDsFromData() []int64 {
 	userMutex.RUnlock()
 
 	return userIDs
+}
+
+// SyncTransactionToDatabase menyinkronkan transaksi dari in-memory ke database
+func SyncTransactionToDatabase(tx *dto.Transaction) error {
+	// Parse times
+	createdAt, err := time.Parse("2006-01-02 15:04:05", tx.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("invalid created_at format: %v", err)
+	}
+
+	expiredAt, err := time.Parse("2006-01-02 15:04:05", tx.ExpiredAt)
+	if err != nil {
+		return fmt.Errorf("invalid expired_at format: %v", err)
+	}
+
+	// Create database transaction model
+	dbTx := models.Transaction{
+		ID:        tx.ID,
+		UserID:    tx.UserID,
+		Username:  tx.Username,
+		Amount:    tx.Amount,
+		Status:    tx.Status,
+		QRISCode:  tx.QRISCode,
+		CreatedAt: createdAt,
+		ExpiredAt: expiredAt,
+	}
+
+	// Set approved fields if available
+	if tx.ApprovedBy != 0 {
+		dbTx.ApprovedBy = &tx.ApprovedBy
+	}
+
+	if tx.ApprovedAt != "" {
+		approvedAt, err := time.Parse("2006-01-02 15:04:05", tx.ApprovedAt)
+		if err == nil {
+			dbTx.ApprovedAt = &approvedAt
+		}
+	}
+
+	// Save to database (upsert)
+	return config.DB.Save(&dbTx).Error
+}
+
+// LoadTransactionsFromDatabase memuat transaksi dari database ke in-memory
+func LoadTransactionsFromDatabase() error {
+	var dbTransactions []models.Transaction
+	err := config.DB.Find(&dbTransactions).Error
+	if err != nil {
+		return err
+	}
+
+	TxMutex.Lock()
+	defer TxMutex.Unlock()
+
+	// Clear existing in-memory transactions
+	Transactions = make(map[string]*dto.Transaction)
+
+	// Load from database
+	for _, dbTx := range dbTransactions {
+		tx := &dto.Transaction{
+			ID:        dbTx.ID,
+			UserID:    dbTx.UserID,
+			Username:  dbTx.Username,
+			Amount:    dbTx.Amount,
+			Status:    dbTx.Status,
+			QRISCode:  dbTx.QRISCode,
+			CreatedAt: dbTx.CreatedAt.Format("2006-01-02 15:04:05"),
+			ExpiredAt: dbTx.ExpiredAt.Format("2006-01-02 15:04:05"),
+		}
+
+		if dbTx.ApprovedBy != nil {
+			tx.ApprovedBy = *dbTx.ApprovedBy
+		}
+
+		if dbTx.ApprovedAt != nil {
+			tx.ApprovedAt = dbTx.ApprovedAt.Format("2006-01-02 15:04:05")
+		}
+
+		Transactions[tx.ID] = tx
+	}
+
+	log.Printf("Loaded %d transactions from database", len(Transactions))
+	return nil
 }
