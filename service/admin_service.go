@@ -8,6 +8,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/nabilulilalbab/bottele/config"
 	"github.com/nabilulilalbab/bottele/dto"
+	"github.com/nabilulilalbab/bottele/models"
 )
 
 // Reference to variables from topup_service
@@ -28,9 +29,9 @@ func SendMessageToAdmin(bot *tgbotapi.BotAPI, message string, fromUser *tgbotapi
 🕐 *Waktu:* %s
 
 💬 *Pesan:*
-%s`, 
-		getUserDisplayName(fromUser), 
-		fromUser.UserName, 
+%s`,
+		getUserDisplayName(fromUser),
+		fromUser.UserName,
 		fromUser.ID,
 		time.Now().Format("02/01/2006 15:04:05"),
 		message)
@@ -105,27 +106,51 @@ func BroadcastMessage(bot *tgbotapi.BotAPI, message string, userIDs []int64) err
 func GetAllUserIDs() []int64 {
 	var userIDs []int64
 	userMap := make(map[int64]bool)
-	
-	// Get from transactions using direct access
-	allTransactions := GetAllTransactions()
-	for _, tx := range allTransactions {
+
+	// Get from in-memory transactions
+	TxMutex.RLock()
+	for _, tx := range Transactions {
 		if !userMap[tx.UserID] {
 			userIDs = append(userIDs, tx.UserID)
 			userMap[tx.UserID] = true
 		}
 	}
-	
+	TxMutex.RUnlock()
+
+	// Also get from active users in database
+	activeUserIDs := GetAllUserIDsFromData()
+	for _, userID := range activeUserIDs {
+		if !userMap[userID] {
+			userIDs = append(userIDs, userID)
+			userMap[userID] = true
+		}
+	}
+
+	// Get users from database transactions and balances
+	var dbUsers []models.User
+	if err := config.DB.Find(&dbUsers).Error; err == nil {
+		for _, user := range dbUsers {
+			if !userMap[user.ChatID] {
+				userIDs = append(userIDs, user.ChatID)
+				userMap[user.ChatID] = true
+			}
+		}
+	}
+
 	return userIDs
 }
 
 // GetAllTransactions mendapatkan semua transaksi untuk statistik
 func GetAllTransactions() []*dto.Transaction {
 	var transactions []*dto.Transaction
-	
-	// Get pending transactions (these are accessible)
-	pending := GetPendingTransactions()
-	transactions = append(transactions, pending...)
-	
+
+	// Get all transactions from in-memory storage
+	TxMutex.RLock()
+	for _, tx := range Transactions {
+		transactions = append(transactions, tx)
+	}
+	TxMutex.RUnlock()
+
 	return transactions
 }
 
@@ -139,7 +164,7 @@ func GetUserStats() string {
 	pendingCount := 0
 	expiredCount := 0
 	totalRevenue := int64(0)
-	
+
 	for _, tx := range allTransactions {
 		switch tx.Status {
 		case "confirmed":
@@ -175,7 +200,7 @@ func GetUserStats() string {
 • Total Revenue: %s
 • Rata-rata per Transaksi: %s
 
-📈 *Status:* Real-time data`, 
+📈 *Status:* Real-time data`,
 		totalUsers,
 		totalUsers,
 		totalTransactions,
@@ -198,19 +223,20 @@ func formatPrice(price int64) string {
 	if price == 0 {
 		return "Rp 0"
 	}
-	
-	priceStr := fmt.Sprintf("Rp %d", price)
-	// Simple thousand separator
-	if price >= 1000 {
-		priceStr = fmt.Sprintf("Rp %d.%03d", price/1000, price%1000)
-		if price >= 1000000 {
-			millions := price / 1000000
-			thousands := (price % 1000000) / 1000
-			hundreds := price % 1000
-			priceStr = fmt.Sprintf("Rp %d.%03d.%03d", millions, thousands, hundreds)
+
+	// Convert to string and add thousand separators
+	priceStr := fmt.Sprintf("%d", price)
+	result := "Rp "
+
+	// Add dots every 3 digits from right
+	for i, digit := range priceStr {
+		if i > 0 && (len(priceStr)-i)%3 == 0 {
+			result += "."
 		}
+		result += string(digit)
 	}
-	return priceStr
+
+	return result
 }
 
 func getUserDisplayName(user *tgbotapi.User) string {

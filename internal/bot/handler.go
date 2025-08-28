@@ -270,47 +270,49 @@ Silakan ketik nominal top up yang Anda inginkan.
 	} else if strings.HasPrefix(data, "history_detail:") {
 		transactionID := strings.TrimPrefix(data, "history_detail:")
 		handleTransactionDetail(bot, chatID, transactionID)
+	} else if strings.HasPrefix(data, "approve_tx:") {
+		transactionID := strings.TrimPrefix(data, "approve_tx:")
+		handleApproveTransaction(bot, chatID, transactionID)
+	} else if strings.HasPrefix(data, "reject_tx:") {
+		transactionID := strings.TrimPrefix(data, "reject_tx:")
+		handleRejectTransaction(bot, chatID, transactionID)
 	}
 }
 
 func handleStart(bot *tgbotapi.BotAPI, chatID int64) {
 	clearUserState(chatID)
 
-	text := `╔══════════════════════════╗
-║    🌟 *GRN STORE* 🌟     ║
-║   *Premium Digital Store*  ║
-╚══════════════════════════╝
-
-🎯 *SELAMAT DATANG!*
-Terima kasih telah memilih GRN Store sebagai partner digital Anda!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🛍️ *LAYANAN TERSEDIA:*
-• 📱 Pulsa & Paket Data All Operator
-• 🎮 Voucher Game & E-Sports
-• 💳 Top Up E-Wallet (DANA, OVO, dll)
-• 🔥 Promo Spesial Setiap Hari
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 *CARA PEMBELIAN:*
-1️⃣ Pilih produk yang diinginkan
-2️⃣ Masukkan nomor tujuan dengan benar
-3️⃣ Pilih metode pembayaran (QRIS/E-Wallet)
-4️⃣ Selesaikan pembayaran sesuai instruksi
-5️⃣ Produk otomatis masuk dalam 1-5 menit
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✨ *KEUNGGULAN KAMI:*
-🚀 Proses otomatis 24/7
-💰 Harga terjangkau & kompetitif  
-🔒 Transaksi aman & terpercaya
-⚡ Pengisian super cepat
-🎯 Customer service responsif
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ *PENTING:* Baca /rules sebelum bertransaksi
-
-🚀 *Siap berbelanja? Klik tombol di bawah!*`
+	text := "```\n" +
+		"╔══════════════════════════╗\n" +
+		"║       🌟 GRN STORE 🌟      ║\n" +
+		"║   Premium Digital Store   ║\n" +
+		"╚══════════════════════════╝\n\n" +
+		"🎯 SELAMAT DATANG!\n" +
+		"Terima kasih telah memilih GRN Store!\n\n" +
+		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+		"🛍️ LAYANAN KAMI:\n" +
+		"• 📶 Jual Kuota Internet All Operator\n" +
+		"• 💳 Top Up Saldo\n" +
+		"• 🌐 VPN Premium (SSHWS, Trojan, Vmess, Vless)\n" +
+		"   ➝ Rp8.000 / bulan\n" +
+		"   ➝ Server SG tersedia\n\n" +
+		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+		"📋 ALUR PEMBELIAN KUOTA:\n" +
+		"1️⃣ Top Up saldo di bot\n" +
+		"2️⃣ Pilih paket kuota yang ingin dibeli\n" +
+		"3️⃣ Lakukan Verifikasi OTP (wajib)\n" +
+		"4️⃣ Lanjutkan pembayaran\n" +
+		"   (beberapa paket ada tambahan via DANA/QRIS – baca deskripsi)\n" +
+		"5️⃣ Kuota akan diproses otomatis\n\n" +
+		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+		"⚠️ PERATURAN:\n" +
+		"- 🚫 Tidak boleh spam & neko²\n" +
+		"- ❗ Jika ada error segera lapor admin\n" +
+		"- ⏳ Jika bot lemot, mohon sabar (mungkin sedang banyak pengguna)\n\n" +
+		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+		"💬 Grup VPN Server SG:\n" +
+		"👉 https://chat.whatsapp.com/IeIXOndIoFr0apnlKzghUC\n" +
+		"```"
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -1324,29 +1326,35 @@ Daftar transaksi yang menunggu konfirmasi:
 
 `
 
+	// Create keyboard with approve/reject buttons for each transaction
+	var keyboardRows [][]tgbotapi.InlineKeyboardButton
+
 	for i, tx := range pendingTxs {
-		text += fmt.Sprintf(`%d. *%s* (@%s)
+		text += fmt.Sprintf(`%d. *%s* (ID: %d)
    💳 Nominal: %s
    🆔 ID: `+"`%s`"+`
    ⏰ Expired: %s
    
-`, i+1, tx.Username, tx.Username, formatPrice(tx.Amount), tx.ID, tx.ExpiredAt)
+`, i+1, tx.Username, tx.UserID, formatPrice(tx.Amount), tx.ID, tx.ExpiredAt)
+
+		// Add approve/reject buttons for each transaction
+		keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("✅ Approve #%d", i+1), fmt.Sprintf("approve_tx:%s", tx.ID)),
+			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("❌ Reject #%d", i+1), fmt.Sprintf("reject_tx:%s", tx.ID)),
+		))
 	}
 
-	text += `*Command untuk konfirmasi:*
-• /confirm <transaction_id> - ACC transaksi
-• /reject <transaction_id> - Tolak transaksi
+	text += `*Klik tombol di bawah untuk approve/reject transaksi:*`
 
-*Contoh:* /confirm TXN_123456789_1234567890`
+	// Add control buttons
+	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🔄 Refresh", "admin_pending"),
+	))
+	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🔙 Panel Admin", "admin_panel"),
+	))
 
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🔄 Refresh", "admin_pending"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🔙 Panel Admin", "admin_panel"),
-		),
-	)
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = "Markdown"
@@ -2597,7 +2605,7 @@ Halaman: %d dari %d
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for i, tx := range history[start:end] {
 		statusIcon := getStatusIcon(tx.Status)
-		
+
 		// Recalculate price to ensure consistency (in case old transactions have wrong price)
 		var displayPrice int64
 		if packagePrice, err := service.GetPackagePrice(tx.PackageCode); err == nil {
@@ -2606,7 +2614,7 @@ Halaman: %d dari %d
 			// Fallback to stored price if package lookup fails
 			displayPrice = tx.Price
 		}
-		
+
 		btnText := fmt.Sprintf("%d. %s %s - %s",
 			start+i+1,
 			statusIcon,
@@ -2926,7 +2934,6 @@ func sendRulesMessage(bot *tgbotapi.BotAPI, chatID int64) {
 	}
 }
 
-
 func handleTopUpCommand(bot *tgbotapi.BotAPI, chatID int64) {
 	text := `╔══════════════════════════╗
 ║     💳 *TOP UP SALDO*    ║
@@ -2990,7 +2997,7 @@ func handleHistoryCommandNew(bot *tgbotapi.BotAPI, chatID int64) {
 		sendErrorMessage(bot, chatID, "❌ Gagal mengambil riwayat transaksi.")
 		return
 	}
-	
+
 	if len(history) == 0 {
 		text := `╔══════════════════════════╗
 ║    📜 *RIWAYAT KOSONG*   ║
@@ -3020,4 +3027,94 @@ Mulai berbelanja sekarang untuk melihat riwayat transaksi Anda!
 	}
 
 	handleHistoryCommand(bot, chatID)
+}
+
+// handleApproveTransaction handles transaction approval via inline button
+func handleApproveTransaction(bot *tgbotapi.BotAPI, chatID int64, transactionID string) {
+	// Check if user is admin
+	if !config.IsAdmin(chatID) {
+		bot.Request(tgbotapi.NewCallback("", "❌ Anda tidak memiliki akses admin."))
+		return
+	}
+
+	// Confirm transaction
+	err := service.ConfirmTopUp(transactionID, chatID)
+	if err != nil {
+		log.Printf("Error confirming top up: %v", err)
+		bot.Request(tgbotapi.NewCallback("", "❌ Gagal approve transaksi."))
+		return
+	}
+
+	// Send success message
+	text := fmt.Sprintf(`✅ *Transaksi Berhasil Di-Approve*
+
+🆔 *Transaction ID:* `+"`%s`"+`
+👤 *Approved by:* Admin
+⏰ *Waktu:* %s
+
+User telah mendapat notifikasi dan saldo telah ditambahkan.`,
+		transactionID,
+		time.Now().Format("02/01/2006 15:04:05"))
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 Lihat Pending", "admin_pending"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Panel Admin", "admin_panel"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending approve confirmation: %v", err)
+	}
+}
+
+// handleRejectTransaction handles transaction rejection via inline button
+func handleRejectTransaction(bot *tgbotapi.BotAPI, chatID int64, transactionID string) {
+	// Check if user is admin
+	if !config.IsAdmin(chatID) {
+		bot.Request(tgbotapi.NewCallback("", "❌ Anda tidak memiliki akses admin."))
+		return
+	}
+
+	// Reject transaction
+	err := service.RejectTopUp(transactionID, chatID)
+	if err != nil {
+		log.Printf("Error rejecting top up: %v", err)
+		bot.Request(tgbotapi.NewCallback("", "❌ Gagal reject transaksi."))
+		return
+	}
+
+	// Send success message
+	text := fmt.Sprintf(`❌ *Transaksi Berhasil Di-Reject*
+
+🆔 *Transaction ID:* `+"`%s`"+`
+👤 *Rejected by:* Admin
+⏰ *Waktu:* %s
+
+User telah mendapat notifikasi penolakan.`,
+		transactionID,
+		time.Now().Format("02/01/2006 15:04:05"))
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 Lihat Pending", "admin_pending"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Panel Admin", "admin_panel"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending reject confirmation: %v", err)
+	}
 }
