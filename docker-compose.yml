@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  bottele-app:
+    build: .
+    ports:
+      - "1462:1462"
+    environment:
+      - PORT=1462
+    volumes:
+      - ./data:/root/data
+      - ./grnstore.db:/root/grnstore.db
+    restart: unless-stopped
+    container_name: bottele-telegram-bot
