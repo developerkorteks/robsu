@@ -11,6 +11,10 @@ type UserState struct {
 	PhoneNumber string
 	AuthID      string
 	ProductCode string
+	VPNProtocol string
+	VPNEmail    string
+	VPNPassword string
+	VPNUsername string
 	mu          sync.RWMutex
 }
 
@@ -72,6 +76,37 @@ func setUserData(chatID int64, phone, authID, productCode string) {
 	
 	// Debug log
 	log.Printf("DEBUG setUserData - User %d: phone='%s', authID='%s', productCode='%s'", chatID, phone, authID, productCode)
+}
+
+func setUserVPNData(chatID int64, protocol, email, password, username string) {
+	statesMutex.Lock()
+	defer statesMutex.Unlock()
+	
+	if userState, exists := userStates[chatID]; exists {
+		userState.mu.Lock()
+		if protocol != "" {
+			userState.VPNProtocol = protocol
+		}
+		if email != "" {
+			userState.VPNEmail = email
+		}
+		if password != "" {
+			userState.VPNPassword = password
+		}
+		if username != "" {
+			userState.VPNUsername = username
+		}
+		userState.mu.Unlock()
+	} else {
+		// Create new state if doesn't exist
+		userStates[chatID] = &UserState{
+			State:       "start",
+			VPNProtocol: protocol,
+			VPNEmail:    email,
+			VPNPassword: password,
+			VPNUsername: username,
+		}
+	}
 }
 
 func clearUserState(chatID int64) {

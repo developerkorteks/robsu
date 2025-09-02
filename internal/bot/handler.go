@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
@@ -129,6 +130,14 @@ func handleMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 		handleBroadcastMessageInput(bot, chatID, message.Text)
 	case "waiting_search_query":
 		handleSearchQueryInput(bot, chatID, message.Text)
+	case "waiting_vpn_email":
+		handleVPNEmailInput(bot, chatID, message.Text)
+	case "waiting_vpn_password":
+		handleVPNPasswordInput(bot, chatID, message.Text)
+	case "waiting_vpn_days":
+		handleVPNDaysInput(bot, chatID, message.Text)
+	case "waiting_vpn_extend_days":
+		handleVPNExtendDaysInput(bot, chatID, message.Text)
 	default:
 		showMainMenu(bot, chatID)
 	}
@@ -276,6 +285,30 @@ Silakan ketik nominal top up yang Anda inginkan.
 	} else if strings.HasPrefix(data, "reject_tx:") {
 		transactionID := strings.TrimPrefix(data, "reject_tx:")
 		handleRejectTransaction(bot, chatID, transactionID)
+	} else if data == "vpn_menu" {
+		handleVPNMenu(bot, chatID)
+	} else if strings.HasPrefix(data, "vpn_create:") {
+		protocol := strings.TrimPrefix(data, "vpn_create:")
+		handleVPNCreateStart(bot, chatID, protocol)
+	} else if data == "vpn_list" {
+		handleVPNList(bot, chatID)
+	} else if data == "vpn_history" {
+		handleVPNHistory(bot, chatID)
+	} else if strings.HasPrefix(data, "vpn_extend:") {
+		vpnUsername := strings.TrimPrefix(data, "vpn_extend:")
+		handleVPNExtendStart(bot, chatID, vpnUsername)
+	} else if strings.HasPrefix(data, "vpn_detail:") {
+		vpnUsername := strings.TrimPrefix(data, "vpn_detail:")
+		handleVPNDetail(bot, chatID, vpnUsername)
+	} else if strings.HasPrefix(data, "vpn_days:") {
+		daysStr := strings.TrimPrefix(data, "vpn_days:")
+		handleVPNDaysInput(bot, chatID, daysStr)
+	} else if strings.HasPrefix(data, "vpn_confirm:") {
+		daysStr := strings.TrimPrefix(data, "vpn_confirm:")
+		handleVPNConfirm(bot, chatID, daysStr)
+	} else if strings.HasPrefix(data, "vpn_extend_days:") {
+		daysStr := strings.TrimPrefix(data, "vpn_extend_days:")
+		handleVPNExtendDaysInput(bot, chatID, daysStr)
 	}
 }
 
@@ -358,6 +391,9 @@ Pilih layanan yang Anda butuhkan:`
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("💰 Top Up Saldo", "topup"),
 			tgbotapi.NewInlineKeyboardButtonData("💳 Cek Saldo", "check_balance"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔐 VPN Premium", "vpn_menu"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("ℹ️ Bantuan", "help"),
@@ -3117,4 +3153,1223 @@ User telah mendapat notifikasi penolakan.`,
 	if _, err := bot.Send(msg); err != nil {
 		log.Printf("Error sending reject confirmation: %v", err)
 	}
+}
+
+// VPN Functions
+
+func handleVPNMenu(bot *tgbotapi.BotAPI, chatID int64) {
+	// Check if user has minimum balance
+	balance := service.GetUserBalance(chatID)
+	if balance.Balance < 10000 {
+		text := fmt.Sprintf(`🔐 *VPN Premium - GRN Store*
+
+❌ *Saldo Tidak Mencukupi*
+
+Untuk menggunakan layanan VPN, Anda memerlukan minimal saldo Rp 10.000.
+
+💳 *Saldo Anda saat ini:* %s
+💰 *Minimal saldo:* Rp 10.000
+💸 *Kurang:* %s
+
+Silakan top up saldo terlebih dahulu.`, 
+			formatPrice(balance.Balance), 
+			formatPrice(10000-balance.Balance))
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("💰 Top Up Saldo", "topup"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔙 Menu Utama", "main_menu"),
+			),
+		)
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+		msg.ReplyMarkup = keyboard
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending VPN insufficient balance: %v", err)
+		}
+		return
+	}
+
+	text := `🔐 *VPN Premium - GRN Store*
+
+🌟 *Server Singapore - Kualitas Terbaik*
+💰 *Harga:* Rp 8.000/bulan (fleksibel per hari)
+📊 *Perhitungan:* Rp 266.67/hari
+💳 *Saldo Anda:* ` + formatPrice(balance.Balance) + `
+
+🔒 *Protokol Tersedia:*
+• SSH/SSL - Stabil & Cepat
+• Trojan - Anti Blokir
+• VLESS - Modern & Efisien
+• VMESS - Fleksibel & Aman
+
+✨ *Fitur Unggulan:*
+• 🌐 Server Singapore Premium
+• ⚡ Koneksi Super Cepat
+• 🔒 Enkripsi Tingkat Militer
+• 📱 Support Semua Device
+• 🎯 Anti Lag Gaming
+• 📺 Streaming Lancar
+
+💡 *Fleksibilitas Pembayaran:*
+Beli sesuai kebutuhan - 1 hari, 7 hari, 30 hari, atau custom!`
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔑 SSH/SSL", "vpn_create:ssh"),
+			tgbotapi.NewInlineKeyboardButtonData("🛡️ Trojan", "vpn_create:trojan"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("⚡ VLESS", "vpn_create:vless"),
+			tgbotapi.NewInlineKeyboardButtonData("🔐 VMESS", "vpn_create:vmess"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 VPN Saya", "vpn_list"),
+			tgbotapi.NewInlineKeyboardButtonData("📜 Riwayat VPN", "vpn_history"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Menu Utama", "main_menu"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN menu: %v", err)
+	}
+}
+
+func handleVPNCreateStart(bot *tgbotapi.BotAPI, chatID int64, protocol string) {
+	// Store protocol in user state
+	setUserVPNData(chatID, protocol, "", "", "")
+	setUserState(chatID, "waiting_vpn_email")
+
+	protocolName := map[string]string{
+		"ssh":    "SSH/SSL",
+		"trojan": "Trojan",
+		"vless":  "VLESS",
+		"vmess":  "VMESS",
+	}
+
+	text := fmt.Sprintf(`🔐 *Buat VPN %s*
+
+📧 *Langkah 1: Email*
+
+Masukkan email untuk akun VPN Anda.
+Email ini akan digunakan untuk identifikasi akun.
+
+*Contoh:* user@gmail.com
+
+⚠️ *Catatan:* Email tidak perlu valid/aktif, hanya untuk identifikasi.
+
+Ketik email Anda:`, protocolName[protocol])
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❌ Batal", "vpn_menu"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN create start: %v", err)
+	}
+}
+
+func handleVPNEmailInput(bot *tgbotapi.BotAPI, chatID int64, email string) {
+	email = strings.TrimSpace(email)
+	
+	// Basic email validation
+	if !strings.Contains(email, "@") || len(email) < 5 {
+		text := `❌ *Format Email Tidak Valid*
+
+Silakan masukkan email dengan format yang benar.
+
+*Contoh:* user@gmail.com
+
+Ketik email Anda:`
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending invalid email message: %v", err)
+		}
+		return
+	}
+
+	// Store email and move to password
+	setUserVPNData(chatID, "", email, "", "")
+	setUserState(chatID, "waiting_vpn_password")
+
+	text := `🔐 *Langkah 2: Password*
+
+Masukkan password untuk akun VPN Anda.
+
+*Syarat Password:*
+• Minimal 6 karakter
+• Boleh kombinasi huruf, angka, simbol
+• Mudah diingat untuk Anda
+
+*Contoh:* mypass123
+
+Ketik password Anda:`
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❌ Batal", "vpn_menu"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN password request: %v", err)
+	}
+}
+
+func handleVPNPasswordInput(bot *tgbotapi.BotAPI, chatID int64, password string) {
+	password = strings.TrimSpace(password)
+	
+	// Basic password validation
+	if len(password) < 6 {
+		text := `❌ *Password Terlalu Pendek*
+
+Password minimal 6 karakter.
+
+*Contoh:* mypass123
+
+Ketik password Anda:`
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending invalid password message: %v", err)
+		}
+		return
+	}
+
+	// Store password and move to days
+	setUserVPNData(chatID, "", "", password, "")
+	setUserState(chatID, "waiting_vpn_days")
+
+	text := `📅 *Langkah 3: Durasi*
+
+Berapa hari VPN yang ingin Anda beli?
+
+💰 *Perhitungan Harga:*
+• 1 hari = Rp 267
+• 7 hari = Rp 1.867  
+• 15 hari = Rp 4.000
+• 30 hari = Rp 8.000
+
+*Contoh Input:*
+• Ketik: 1 (untuk 1 hari)
+• Ketik: 7 (untuk 1 minggu)
+• Ketik: 30 (untuk 1 bulan)
+
+Ketik jumlah hari:`
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("1 hari", "vpn_days:1"),
+			tgbotapi.NewInlineKeyboardButtonData("7 hari", "vpn_days:7"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("15 hari", "vpn_days:15"),
+			tgbotapi.NewInlineKeyboardButtonData("30 hari", "vpn_days:30"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❌ Batal", "vpn_menu"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN days request: %v", err)
+	}
+}
+
+func handleVPNDaysInput(bot *tgbotapi.BotAPI, chatID int64, daysStr string) {
+	days, err := strconv.Atoi(strings.TrimSpace(daysStr))
+	if err != nil || days <= 0 {
+		text := `❌ *Input Tidak Valid*
+
+Silakan masukkan angka yang valid untuk jumlah hari.
+
+*Contoh:* 1, 7, 15, 30
+
+Ketik jumlah hari:`
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending invalid days message: %v", err)
+		}
+		return
+	}
+
+	if days > 365 {
+		text := `❌ *Maksimal 365 Hari*
+
+Untuk keamanan, maksimal pembelian VPN adalah 365 hari.
+
+Ketik jumlah hari (1-365):`
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending max days message: %v", err)
+		}
+		return
+	}
+
+	// Get user state
+	userState := getUserState(chatID)
+	userState.mu.RLock()
+	protocol := userState.VPNProtocol
+	email := userState.VPNEmail
+	password := userState.VPNPassword
+	userState.mu.RUnlock()
+
+	if protocol == "" || email == "" || password == "" {
+		sendErrorMessage(bot, chatID, "❌ Data tidak lengkap. Silakan mulai ulang.")
+		setUserState(chatID, "start")
+		return
+	}
+
+	// Calculate price
+	price := service.CalculateVPNPrice(days)
+	
+	// Check balance
+	balance := service.GetUserBalance(chatID)
+	if balance.Balance < price {
+		text := fmt.Sprintf(`❌ *Saldo Tidak Mencukupi*
+
+💰 *Harga VPN %d hari:* %s
+💳 *Saldo Anda:* %s
+💸 *Kurang:* %s
+
+Silakan top up saldo terlebih dahulu.`, 
+			days, formatPrice(price), formatPrice(balance.Balance), formatPrice(price-balance.Balance))
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("💰 Top Up Saldo", "topup"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔙 Menu VPN", "vpn_menu"),
+			),
+		)
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+		msg.ReplyMarkup = keyboard
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending VPN insufficient balance: %v", err)
+		}
+		return
+	}
+
+	// Show confirmation
+	protocolName := map[string]string{
+		"ssh":    "SSH/SSL",
+		"trojan": "Trojan",
+		"vless":  "VLESS",
+		"vmess":  "VMESS",
+	}
+
+	text := fmt.Sprintf(`✅ *Konfirmasi Pembelian VPN*
+
+🔐 *Protokol:* %s
+📧 *Email:* %s
+🔑 *Password:* %s
+📅 *Durasi:* %d hari
+💰 *Harga:* %s
+💳 *Saldo Tersisa:* %s
+
+Apakah Anda yakin ingin membeli VPN ini?`, 
+		protocolName[protocol], email, password, days, formatPrice(price), formatPrice(balance.Balance-price))
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("✅ Ya, Beli Sekarang", fmt.Sprintf("vpn_confirm:%d", days)),
+			tgbotapi.NewInlineKeyboardButtonData("❌ Batal", "vpn_menu"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN confirmation: %v", err)
+	}
+}
+
+func handleVPNList(bot *tgbotapi.BotAPI, chatID int64) {
+	vpnUsers, err := service.GetUserVPNs(chatID)
+	if err != nil {
+		log.Printf("Error getting user VPNs: %v", err)
+		sendErrorMessage(bot, chatID, "❌ Gagal mengambil data VPN Anda.")
+		return
+	}
+
+	if len(vpnUsers) == 0 {
+		text := `📋 *VPN Saya*
+
+❌ Anda belum memiliki VPN aktif.
+
+Buat VPN pertama Anda sekarang!`
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔐 Buat VPN", "vpn_menu"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔙 Menu Utama", "main_menu"),
+			),
+		)
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+		msg.ReplyMarkup = keyboard
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending empty VPN list: %v", err)
+		}
+		return
+	}
+
+	text := fmt.Sprintf(`📋 *VPN Saya* (%d VPN)
+
+`, len(vpnUsers))
+
+	var rows [][]tgbotapi.InlineKeyboardButton
+	for i, vpn := range vpnUsers {
+		status := "🟢 Aktif"
+		if time.Now().After(vpn.ExpiredAt) {
+			status = "🔴 Expired"
+		}
+
+		btnText := fmt.Sprintf("%d. %s %s - %s", i+1, strings.ToUpper(vpn.Protocol), vpn.VPNUsername, status)
+		if len(btnText) > 60 {
+			btnText = btnText[:57] + "..."
+		}
+
+		btn := tgbotapi.NewInlineKeyboardButtonData(btnText, fmt.Sprintf("vpn_detail:%s", vpn.VPNUsername))
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(btn))
+	}
+
+	// Add control buttons
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🔐 Buat VPN Baru", "vpn_menu"),
+	))
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🔙 Menu Utama", "main_menu"),
+	))
+
+	keyboard := tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN list: %v", err)
+	}
+}
+
+func handleVPNHistory(bot *tgbotapi.BotAPI, chatID int64) {
+	transactions, err := service.GetVPNTransactionHistory(chatID)
+	if err != nil {
+		log.Printf("Error getting VPN history: %v", err)
+		sendErrorMessage(bot, chatID, "❌ Gagal mengambil riwayat VPN.")
+		return
+	}
+
+	if len(transactions) == 0 {
+		text := `📜 *Riwayat VPN*
+
+❌ Belum ada transaksi VPN.
+
+Buat VPN pertama Anda sekarang!`
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔐 Buat VPN", "vpn_menu"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔙 Menu Utama", "main_menu"),
+			),
+		)
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+		msg.ReplyMarkup = keyboard
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending empty VPN history: %v", err)
+		}
+		return
+	}
+
+	text := fmt.Sprintf(`📜 *Riwayat VPN* (%d transaksi)
+
+`, len(transactions))
+
+	for i, tx := range transactions {
+		if i >= 10 { // Limit to 10 recent transactions
+			break
+		}
+
+		statusIcon := getStatusIcon(tx.Status)
+		action := "Buat"
+		if tx.Email == "extend" {
+			action = "Perpanjang"
+		}
+
+		text += fmt.Sprintf(`%d. %s %s %s
+   📅 %d hari - %s
+   💰 %s - %s
+
+`, i+1, statusIcon, action, strings.ToUpper(tx.Protocol), tx.Days, formatPrice(tx.Price), tx.CreatedAt.Format("02/01/06"))
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 VPN Saya", "vpn_list"),
+			tgbotapi.NewInlineKeyboardButtonData("🔐 Buat VPN", "vpn_menu"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Menu Utama", "main_menu"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN history: %v", err)
+	}
+}
+
+func handleVPNConfirm(bot *tgbotapi.BotAPI, chatID int64, daysStr string) {
+	days, err := strconv.Atoi(daysStr)
+	if err != nil {
+		sendErrorMessage(bot, chatID, "❌ Data tidak valid. Silakan mulai ulang.")
+		return
+	}
+
+	// Get user state
+	userState := getUserState(chatID)
+	userState.mu.RLock()
+	protocol := userState.VPNProtocol
+	email := userState.VPNEmail
+	password := userState.VPNPassword
+	userState.mu.RUnlock()
+
+	if protocol == "" || email == "" || password == "" {
+		sendErrorMessage(bot, chatID, "❌ Data tidak lengkap. Silakan mulai ulang.")
+		setUserState(chatID, "start")
+		return
+	}
+
+	// Send processing message
+	processingMsg := tgbotapi.NewMessage(chatID, "⏳ Sedang membuat VPN Anda, mohon tunggu...")
+	sentMsg, err := bot.Send(processingMsg)
+	if err != nil {
+		log.Printf("Error sending processing message: %v", err)
+	}
+
+	// Create VPN
+	vpnTx, err := service.CreateVPNUser(chatID, "", email, password, protocol, days)
+	if err != nil {
+		// Delete processing message
+		if sentMsg.MessageID != 0 {
+			deleteMsg := tgbotapi.NewDeleteMessage(chatID, sentMsg.MessageID)
+			bot.Send(deleteMsg)
+		}
+
+		sendErrorMessage(bot, chatID, fmt.Sprintf("❌ %s", err.Error()))
+		setUserState(chatID, "start")
+		return
+	}
+
+	// Delete processing message
+	if sentMsg.MessageID != 0 {
+		deleteMsg := tgbotapi.NewDeleteMessage(chatID, sentMsg.MessageID)
+		bot.Send(deleteMsg)
+	}
+
+	// Reset user state
+	setUserState(chatID, "start")
+
+	// Get updated balance
+	balance := service.GetUserBalance(chatID)
+
+	// Parse response data to show complete config
+	var responseData map[string]interface{}
+	configText := ""
+	if vpnTx.ResponseData != "" {
+		json.Unmarshal([]byte(vpnTx.ResponseData), &responseData)
+		if data, ok := responseData["data"].(map[string]interface{}); ok {
+			configText = formatVPNConfig(protocol, data)
+		}
+	}
+
+	// Send success message
+	text := fmt.Sprintf(`✅ *VPN Berhasil Dibuat!*
+
+🔐 *Protokol:* %s
+👤 *Username:* %s
+🔑 *Password:* %s
+📅 *Durasi:* %d hari
+💰 *Harga:* %s
+💳 *Saldo Tersisa:* %s
+
+%s
+
+🎉 VPN Anda sudah aktif dan siap digunakan!`, 
+		strings.ToUpper(protocol), vpnTx.Username, password, days, 
+		formatPrice(vpnTx.Price), formatPrice(balance.Balance), configText)
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 Lihat VPN Saya", "vpn_list"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔐 Buat VPN Lagi", "vpn_menu"),
+			tgbotapi.NewInlineKeyboardButtonData("🏠 Menu Utama", "main_menu"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN success message: %v", err)
+	}
+
+	// Send WhatsApp notification
+	whatsappMsg := fmt.Sprintf(`🔐 VPN BARU DIBUAT
+
+User: %d
+Protokol: %s
+Username: %s
+Durasi: %d hari
+Harga: %s
+Saldo Tersisa: %s
+
+VPN berhasil dibuat dan aktif.`,
+		chatID, strings.ToUpper(protocol), vpnTx.Username, days,
+		formatPrice(vpnTx.Price), formatPrice(balance.Balance))
+
+	service.SendWhatsAppNotification(whatsappMsg)
+}
+
+func handleVPNDetail(bot *tgbotapi.BotAPI, chatID int64, vpnUsername string) {
+	// Get VPN details from database
+	vpnUsers, err := service.GetUserVPNs(chatID)
+	if err != nil {
+		sendErrorMessage(bot, chatID, "❌ Gagal mengambil data VPN.")
+		return
+	}
+
+	var selectedVPN *models.VPNUser
+	for _, vpn := range vpnUsers {
+		if vpn.VPNUsername == vpnUsername {
+			selectedVPN = &vpn
+			break
+		}
+	}
+
+	if selectedVPN == nil {
+		sendErrorMessage(bot, chatID, "❌ VPN tidak ditemukan.")
+		return
+	}
+
+	// Parse config data
+	var config map[string]interface{}
+	if selectedVPN.ConfigData != "" {
+		json.Unmarshal([]byte(selectedVPN.ConfigData), &config)
+	}
+
+	status := "🟢 Aktif"
+	daysLeft := int(time.Until(selectedVPN.ExpiredAt).Hours() / 24)
+	if time.Now().After(selectedVPN.ExpiredAt) {
+		status = "🔴 Expired"
+		daysLeft = 0
+	}
+
+	text := fmt.Sprintf(`🔐 *Detail VPN %s*
+
+📊 *Status:* %s
+👤 *Username:* %s
+🔑 *Password:* %s
+🌐 *Server:* %s
+🔌 *Port:* %d
+📅 *Expired:* %s
+⏰ *Sisa:* %d hari
+
+`, strings.ToUpper(selectedVPN.Protocol), status, selectedVPN.VPNUsername, 
+		selectedVPN.Password, selectedVPN.Server, selectedVPN.Port,
+		selectedVPN.ExpiredAt.Format("02/01/2006 15:04"), daysLeft)
+
+	// Add complete protocol-specific config
+	if config != nil {
+		text += formatVPNConfigFromDB(selectedVPN.Protocol, config, selectedVPN.UUID)
+	}
+
+	var keyboard tgbotapi.InlineKeyboardMarkup
+	if status == "🟢 Aktif" {
+		keyboard = tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("⏰ Perpanjang", fmt.Sprintf("vpn_extend:%s", vpnUsername)),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("📋 Kembali ke List", "vpn_list"),
+				tgbotapi.NewInlineKeyboardButtonData("🏠 Menu Utama", "main_menu"),
+			),
+		)
+	} else {
+		keyboard = tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔄 Perpanjang", fmt.Sprintf("vpn_extend:%s", vpnUsername)),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("📋 Kembali ke List", "vpn_list"),
+				tgbotapi.NewInlineKeyboardButtonData("🏠 Menu Utama", "main_menu"),
+			),
+		)
+	}
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN detail: %v", err)
+	}
+}
+
+func handleVPNExtendStart(bot *tgbotapi.BotAPI, chatID int64, vpnUsername string) {
+	// Store VPN username in state
+	setUserVPNData(chatID, "", "", "", vpnUsername)
+	setUserState(chatID, "waiting_vpn_extend_days")
+
+	text := fmt.Sprintf(`⏰ *Perpanjang VPN*
+
+👤 *VPN Username:* %s
+
+Berapa hari ingin diperpanjang?
+
+💰 *Perhitungan Harga:*
+• 1 hari = Rp 267
+• 7 hari = Rp 1.867  
+• 15 hari = Rp 4.000
+• 30 hari = Rp 8.000
+
+*Contoh Input:*
+• Ketik: 7 (untuk 1 minggu)
+• Ketik: 30 (untuk 1 bulan)
+
+Ketik jumlah hari:`, vpnUsername)
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("7 hari", "vpn_extend_days:7"),
+			tgbotapi.NewInlineKeyboardButtonData("15 hari", "vpn_extend_days:15"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("30 hari", "vpn_extend_days:30"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❌ Batal", "vpn_list"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN extend start: %v", err)
+	}
+}
+
+func handleVPNExtendDaysInput(bot *tgbotapi.BotAPI, chatID int64, daysStr string) {
+	days, err := strconv.Atoi(strings.TrimSpace(daysStr))
+	if err != nil || days <= 0 {
+		text := `❌ *Input Tidak Valid*
+
+Silakan masukkan angka yang valid untuk jumlah hari.
+
+*Contoh:* 7, 15, 30
+
+Ketik jumlah hari:`
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending invalid extend days: %v", err)
+		}
+		return
+	}
+
+	if days > 365 {
+		sendErrorMessage(bot, chatID, "❌ Maksimal perpanjangan adalah 365 hari.")
+		return
+	}
+
+	// Get VPN username from state
+	userState := getUserState(chatID)
+	userState.mu.RLock()
+	vpnUsername := userState.VPNUsername
+	userState.mu.RUnlock()
+
+	if vpnUsername == "" {
+		sendErrorMessage(bot, chatID, "❌ Data tidak lengkap. Silakan mulai ulang.")
+		setUserState(chatID, "start")
+		return
+	}
+
+	// Calculate price
+	price := service.CalculateVPNPrice(days)
+	
+	// Check balance
+	balance := service.GetUserBalance(chatID)
+	if balance.Balance < price {
+		text := fmt.Sprintf(`❌ *Saldo Tidak Mencukupi*
+
+💰 *Harga perpanjangan %d hari:* %s
+💳 *Saldo Anda:* %s
+💸 *Kurang:* %s
+
+Silakan top up saldo terlebih dahulu.`, 
+			days, formatPrice(price), formatPrice(balance.Balance), formatPrice(price-balance.Balance))
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("💰 Top Up Saldo", "topup"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔙 Menu VPN", "vpn_menu"),
+			),
+		)
+
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+		msg.ReplyMarkup = keyboard
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Error sending VPN extend insufficient balance: %v", err)
+		}
+		return
+	}
+
+	// Send processing message
+	processingMsg := tgbotapi.NewMessage(chatID, "⏳ Sedang memperpanjang VPN Anda, mohon tunggu...")
+	sentMsg, err := bot.Send(processingMsg)
+	if err != nil {
+		log.Printf("Error sending processing message: %v", err)
+	}
+
+	// Extend VPN
+	err = service.ExtendVPNUser(chatID, vpnUsername, days)
+	if err != nil {
+		// Delete processing message
+		if sentMsg.MessageID != 0 {
+			deleteMsg := tgbotapi.NewDeleteMessage(chatID, sentMsg.MessageID)
+			bot.Send(deleteMsg)
+		}
+
+		sendErrorMessage(bot, chatID, fmt.Sprintf("❌ %s", err.Error()))
+		setUserState(chatID, "start")
+		return
+	}
+
+	// Delete processing message
+	if sentMsg.MessageID != 0 {
+		deleteMsg := tgbotapi.NewDeleteMessage(chatID, sentMsg.MessageID)
+		bot.Send(deleteMsg)
+	}
+
+	// Reset user state
+	setUserState(chatID, "start")
+
+	// Get updated balance
+	balance = service.GetUserBalance(chatID)
+
+	// Send success message
+	text := fmt.Sprintf(`✅ *VPN Berhasil Diperpanjang!*
+
+👤 *Username:* %s
+📅 *Diperpanjang:* %d hari
+💰 *Harga:* %s
+💳 *Saldo Tersisa:* %s
+
+🎉 VPN Anda telah diperpanjang dan masih aktif!`, 
+		vpnUsername, days, formatPrice(price), formatPrice(balance.Balance))
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 Lihat Detail", fmt.Sprintf("vpn_detail:%s", vpnUsername)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 VPN Saya", "vpn_list"),
+			tgbotapi.NewInlineKeyboardButtonData("🏠 Menu Utama", "main_menu"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Error sending VPN extend success: %v", err)
+	}
+
+	// Send WhatsApp notification
+	whatsappMsg := fmt.Sprintf(`⏰ VPN DIPERPANJANG
+
+User: %d
+Username: %s
+Diperpanjang: %d hari
+Harga: %s
+Saldo Tersisa: %s
+
+VPN berhasil diperpanjang.`,
+		chatID, vpnUsername, days, formatPrice(price), formatPrice(balance.Balance))
+
+	service.SendWhatsAppNotification(whatsappMsg)
+}
+
+// formatVPNConfig formats VPN configuration from API response
+func formatVPNConfig(protocol string, data map[string]interface{}) string {
+	var text string
+	
+	switch protocol {
+	case "ssh":
+		text += "🔧 *Konfigurasi SSH/SSL:*\n"
+		if server, ok := data["server"]; ok {
+			text += fmt.Sprintf("• 🌐 Server: `%v`\n", server)
+		}
+		if port, ok := data["port"]; ok {
+			text += fmt.Sprintf("• 🔌 SSH Port: `%v`\n", port)
+		}
+		if config, ok := data["config"].(map[string]interface{}); ok {
+			if sslPort, ok := config["ssl_port"]; ok {
+				text += fmt.Sprintf("• 🔒 SSL Port: `%v`\n", sslPort)
+			}
+			if stunnelPort, ok := config["stunnel_port"]; ok {
+				text += fmt.Sprintf("• 🔐 Stunnel Port: `%v`\n", stunnelPort)
+			}
+			if wsPort, ok := config["ws_port"]; ok {
+				text += fmt.Sprintf("• 🌐 WebSocket Port: `%v`\n", wsPort)
+			}
+		}
+		
+	case "trojan":
+		text += "🔧 *Konfigurasi Trojan:*\n"
+		if server, ok := data["server"]; ok {
+			text += fmt.Sprintf("• 🌐 Server: `%v`\n", server)
+		}
+		if port, ok := data["port"]; ok {
+			text += fmt.Sprintf("• 🔌 Port: `%v`\n", port)
+		}
+		if password, ok := data["password"]; ok {
+			text += fmt.Sprintf("• 🔑 Key: `%v`\n", password)
+		}
+		if config, ok := data["config"].(map[string]interface{}); ok {
+			if configURL, ok := config["config_url"]; ok {
+				text += fmt.Sprintf("• 📄 Config URL: %v\n", configURL)
+			}
+			if expiredOn, ok := config["expired_on"]; ok {
+				text += fmt.Sprintf("• ⏰ Expired: %v\n", expiredOn)
+			}
+			if host, ok := config["host"]; ok {
+				text += fmt.Sprintf("• 🏠 Host: `%v`\n", host)
+			}
+			if network, ok := config["network"]; ok {
+				text += fmt.Sprintf("• 🌐 Network: %v\n", network)
+			}
+			if path, ok := config["path"]; ok {
+				text += fmt.Sprintf("• 📁 Path: `%v`\n", path)
+			}
+			if serviceName, ok := config["serviceName"]; ok {
+				text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
+			}
+			
+			text += "\n🔗 *Connection Links:*\n"
+			if linkWs, ok := config["link_ws"]; ok {
+				text += fmt.Sprintf("• WebSocket: `%v`\n", linkWs)
+			}
+			if linkGrpc, ok := config["link_grpc"]; ok {
+				text += fmt.Sprintf("• gRPC: `%v`\n", linkGrpc)
+			}
+			if linkGo, ok := config["link_go"]; ok {
+				text += fmt.Sprintf("• Trojan-Go: `%v`\n", linkGo)
+			}
+		}
+		
+	case "vless":
+		text += "🔧 *Konfigurasi VLESS:*\n"
+		if server, ok := data["server"]; ok {
+			text += fmt.Sprintf("• 🌐 Server: `%v`\n", server)
+		}
+		if port, ok := data["port"]; ok {
+			text += fmt.Sprintf("• 🔌 Port: `%v`\n", port)
+		}
+		if uuid, ok := data["uuid"]; ok {
+			text += fmt.Sprintf("• 🆔 UUID: `%v`\n", uuid)
+		}
+		if config, ok := data["config"].(map[string]interface{}); ok {
+			if configURL, ok := config["config_url"]; ok {
+				text += fmt.Sprintf("• 📄 Config URL: %v\n", configURL)
+			}
+			if expiredOn, ok := config["expired_on"]; ok {
+				text += fmt.Sprintf("• ⏰ Expired: %v\n", expiredOn)
+			}
+			if host, ok := config["host"]; ok {
+				text += fmt.Sprintf("• 🏠 Host: `%v`\n", host)
+			}
+			if encryption, ok := config["encryption"]; ok {
+				text += fmt.Sprintf("• 🔐 Encryption: %v\n", encryption)
+			}
+			if network, ok := config["network"]; ok {
+				text += fmt.Sprintf("• 🌐 Network: %v\n", network)
+			}
+			if path, ok := config["path"]; ok {
+				text += fmt.Sprintf("• 📁 Path: `%v`\n", path)
+			}
+			if portNtls, ok := config["port_ntls"]; ok {
+				text += fmt.Sprintf("• 🔌 Port NTLS: `%v`\n", portNtls)
+			}
+			if portTls, ok := config["port_tls"]; ok {
+				text += fmt.Sprintf("• 🔌 Port TLS: `%v`\n", portTls)
+			}
+			if serviceName, ok := config["serviceName"]; ok {
+				text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
+			}
+			
+			text += "\n🔗 *Connection Links:*\n"
+			if linkTls, ok := config["link_tls"]; ok {
+				text += fmt.Sprintf("• TLS: `%v`\n", linkTls)
+			}
+			if linkNtls, ok := config["link_ntls"]; ok {
+				text += fmt.Sprintf("• NTLS: `%v`\n", linkNtls)
+			}
+			if linkGrpc, ok := config["link_grpc"]; ok {
+				text += fmt.Sprintf("• gRPC: `%v`\n", linkGrpc)
+			}
+		}
+		
+	case "vmess":
+		text += "🔧 *Konfigurasi VMESS:*\n"
+		if server, ok := data["server"]; ok {
+			text += fmt.Sprintf("• 🌐 Server: `%v`\n", server)
+		}
+		if port, ok := data["port"]; ok {
+			text += fmt.Sprintf("• 🔌 Port: `%v`\n", port)
+		}
+		if uuid, ok := data["uuid"]; ok {
+			text += fmt.Sprintf("• 🆔 UUID: `%v`\n", uuid)
+		}
+		if config, ok := data["config"].(map[string]interface{}); ok {
+			if configURL, ok := config["config_url"]; ok {
+				text += fmt.Sprintf("• 📄 Config URL: %v\n", configURL)
+			}
+			if expiredOn, ok := config["expired_on"]; ok {
+				text += fmt.Sprintf("• ⏰ Expired: %v\n", expiredOn)
+			}
+			if host, ok := config["host"]; ok {
+				text += fmt.Sprintf("• 🏠 Host: `%v`\n", host)
+			}
+			if alterId, ok := config["alterId"]; ok {
+				text += fmt.Sprintf("• 🔢 Alter ID: %v\n", alterId)
+			}
+			if security, ok := config["security"]; ok {
+				text += fmt.Sprintf("• 🔐 Security: %v\n", security)
+			}
+			if network, ok := config["network"]; ok {
+				text += fmt.Sprintf("• 🌐 Network: %v\n", network)
+			}
+			if path, ok := config["path"]; ok {
+				text += fmt.Sprintf("• 📁 Path: `%v`\n", path)
+			}
+			if serviceName, ok := config["serviceName"]; ok {
+				text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
+			}
+			
+			text += "\n🔗 *Connection Links:*\n"
+			if linkWs, ok := config["link_ws"]; ok {
+				text += fmt.Sprintf("• WebSocket: `%v`\n", linkWs)
+			}
+			if linkGrpc, ok := config["link_grpc"]; ok {
+				text += fmt.Sprintf("• gRPC: `%v`\n", linkGrpc)
+			}
+		}
+	}
+	
+	return text
+}
+
+// formatVPNConfigFromDB formats VPN configuration from database
+func formatVPNConfigFromDB(protocol string, config map[string]interface{}, uuid string) string {
+	var text string
+	
+	switch protocol {
+	case "ssh":
+		text += "🔧 *Konfigurasi SSH/SSL:*\n"
+		if sslPort, ok := config["ssl_port"]; ok {
+			text += fmt.Sprintf("• 🔒 SSL Port: `%v`\n", sslPort)
+		}
+		if stunnelPort, ok := config["stunnel_port"]; ok {
+			text += fmt.Sprintf("• 🔐 Stunnel Port: `%v`\n", stunnelPort)
+		}
+		if wsPort, ok := config["ws_port"]; ok {
+			text += fmt.Sprintf("• 🌐 WebSocket Port: `%v`\n", wsPort)
+		}
+		
+	case "trojan":
+		text += "🔧 *Konfigurasi Trojan:*\n"
+		if uuid != "" {
+			text += fmt.Sprintf("• 🔑 Key: `%s`\n", uuid)
+		}
+		if configURL, ok := config["config_url"]; ok {
+			text += fmt.Sprintf("• 📄 Config URL: %v\n", configURL)
+		}
+		if expiredOn, ok := config["expired_on"]; ok {
+			text += fmt.Sprintf("• ⏰ Expired: %v\n", expiredOn)
+		}
+		if host, ok := config["host"]; ok {
+			text += fmt.Sprintf("• 🏠 Host: `%v`\n", host)
+		}
+		if network, ok := config["network"]; ok {
+			text += fmt.Sprintf("• 🌐 Network: %v\n", network)
+		}
+		if path, ok := config["path"]; ok {
+			text += fmt.Sprintf("• 📁 Path: `%v`\n", path)
+		}
+		if serviceName, ok := config["serviceName"]; ok {
+			text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
+		}
+		
+		text += "\n🔗 *Connection Links:*\n"
+		if linkWs, ok := config["link_ws"]; ok {
+			text += fmt.Sprintf("• WebSocket: `%v`\n", linkWs)
+		}
+		if linkGrpc, ok := config["link_grpc"]; ok {
+			text += fmt.Sprintf("• gRPC: `%v`\n", linkGrpc)
+		}
+		if linkGo, ok := config["link_go"]; ok {
+			text += fmt.Sprintf("• Trojan-Go: `%v`\n", linkGo)
+		}
+		
+	case "vless":
+		text += "🔧 *Konfigurasi VLESS:*\n"
+		if uuid != "" {
+			text += fmt.Sprintf("• 🆔 UUID: `%s`\n", uuid)
+		}
+		if configURL, ok := config["config_url"]; ok {
+			text += fmt.Sprintf("• 📄 Config URL: %v\n", configURL)
+		}
+		if expiredOn, ok := config["expired_on"]; ok {
+			text += fmt.Sprintf("• ⏰ Expired: %v\n", expiredOn)
+		}
+		if host, ok := config["host"]; ok {
+			text += fmt.Sprintf("• 🏠 Host: `%v`\n", host)
+		}
+		if encryption, ok := config["encryption"]; ok {
+			text += fmt.Sprintf("• 🔐 Encryption: %v\n", encryption)
+		}
+		if network, ok := config["network"]; ok {
+			text += fmt.Sprintf("• 🌐 Network: %v\n", network)
+		}
+		if path, ok := config["path"]; ok {
+			text += fmt.Sprintf("• 📁 Path: `%v`\n", path)
+		}
+		if portNtls, ok := config["port_ntls"]; ok {
+			text += fmt.Sprintf("• 🔌 Port NTLS: `%v`\n", portNtls)
+		}
+		if portTls, ok := config["port_tls"]; ok {
+			text += fmt.Sprintf("• 🔌 Port TLS: `%v`\n", portTls)
+		}
+		if serviceName, ok := config["serviceName"]; ok {
+			text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
+		}
+		
+		text += "\n🔗 *Connection Links:*\n"
+		if linkTls, ok := config["link_tls"]; ok {
+			text += fmt.Sprintf("• TLS: `%v`\n", linkTls)
+		}
+		if linkNtls, ok := config["link_ntls"]; ok {
+			text += fmt.Sprintf("• NTLS: `%v`\n", linkNtls)
+		}
+		if linkGrpc, ok := config["link_grpc"]; ok {
+			text += fmt.Sprintf("• gRPC: `%v`\n", linkGrpc)
+		}
+		
+	case "vmess":
+		text += "🔧 *Konfigurasi VMESS:*\n"
+		if uuid != "" {
+			text += fmt.Sprintf("• 🆔 UUID: `%s`\n", uuid)
+		}
+		if configURL, ok := config["config_url"]; ok {
+			text += fmt.Sprintf("• 📄 Config URL: %v\n", configURL)
+		}
+		if expiredOn, ok := config["expired_on"]; ok {
+			text += fmt.Sprintf("• ⏰ Expired: %v\n", expiredOn)
+		}
+		if host, ok := config["host"]; ok {
+			text += fmt.Sprintf("• 🏠 Host: `%v`\n", host)
+		}
+		if alterId, ok := config["alterId"]; ok {
+			text += fmt.Sprintf("• 🔢 Alter ID: %v\n", alterId)
+		}
+		if security, ok := config["security"]; ok {
+			text += fmt.Sprintf("• 🔐 Security: %v\n", security)
+		}
+		if network, ok := config["network"]; ok {
+			text += fmt.Sprintf("• 🌐 Network: %v\n", network)
+		}
+		if path, ok := config["path"]; ok {
+			text += fmt.Sprintf("• 📁 Path: `%v`\n", path)
+		}
+		if serviceName, ok := config["serviceName"]; ok {
+			text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
+		}
+		
+		text += "\n🔗 *Connection Links:*\n"
+		if linkWs, ok := config["link_ws"]; ok {
+			text += fmt.Sprintf("• WebSocket: `%v`\n", linkWs)
+		}
+		if linkGrpc, ok := config["link_grpc"]; ok {
+			text += fmt.Sprintf("• gRPC: `%v`\n", linkGrpc)
+		}
+	}
+	
+	return text
 }

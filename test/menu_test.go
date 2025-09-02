@@ -58,7 +58,7 @@ func fetchPackages() ([]Package, error) {
 func TestMenu(t *testing.T) {
 	token := os.Getenv("TELEGRAM_TOKEN")
 	if token == "" {
-		token = "7613681284:AAG1dcw9MGuRoPyBdvab5INAM1Vm1qix0BM"
+		token = "7781367281:AAHyLZVfhAgb0M0b5HQuY_VlSz0tsE9FbDw"
 	}
 
 	bot, err := tgbotapi.NewBotAPI(token)

@@ -73,6 +73,39 @@ type OTPSession struct {
 	ExpiredAt   time.Time `json:"expired_at"`
 }
 
+// VPNTransaction model untuk transaksi VPN
+type VPNTransaction struct {
+	ID           string    `gorm:"primaryKey" json:"id"`
+	UserID       int64     `gorm:"not null" json:"user_id"`
+	Username     string    `gorm:"not null" json:"username"`
+	Email        string    `gorm:"not null" json:"email"`
+	Password     string    `gorm:"not null" json:"password"`
+	Protocol     string    `gorm:"not null" json:"protocol"` // ssh, trojan, vless, vmess
+	Days         int       `gorm:"not null" json:"days"`
+	Price        int64     `gorm:"not null" json:"price"`
+	Status       string    `gorm:"default:pending" json:"status"` // pending, success, failed
+	ResponseData string    `json:"response_data"` // JSON response from VPN API
+	CreatedAt    time.Time `json:"created_at"`
+	User         User      `gorm:"foreignKey:UserID;references:ChatID" json:"user"`
+}
+
+// VPNUser model untuk menyimpan data VPN user yang aktif
+type VPNUser struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	UserID       int64     `gorm:"not null" json:"user_id"`
+	VPNUsername  string    `gorm:"not null;uniqueIndex" json:"vpn_username"`
+	Protocol     string    `gorm:"not null" json:"protocol"`
+	Server       string    `gorm:"not null" json:"server"`
+	Port         int       `gorm:"not null" json:"port"`
+	Password     string    `json:"password"`
+	UUID         string    `json:"uuid"` // for vless/vmess
+	ConfigData   string    `json:"config_data"` // JSON config from API
+	ExpiredAt    time.Time `gorm:"not null" json:"expired_at"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	User         User      `gorm:"foreignKey:UserID;references:ChatID" json:"user"`
+}
+
 // AutoMigrate runs database migrations
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -82,5 +115,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&PurchaseTransaction{},
 		&ActiveUser{},
 		&OTPSession{},
+		&VPNTransaction{},
+		&VPNUser{},
 	)
 }
