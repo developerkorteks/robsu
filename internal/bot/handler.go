@@ -100,6 +100,8 @@ func handleMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 			handleSearchCommand(bot, message)
 		case "history":
 			handleHistoryCommand(bot, chatID)
+		case "topup":
+			handleTopUpRequest(bot, chatID)
 		case "broadcast":
 			if !config.IsAdmin(chatID) {
 				sendErrorMessage(bot, chatID, "❌ Perintah tidak dikenal. Ketik /menu untuk melihat menu utama.")
@@ -3171,8 +3173,8 @@ Untuk menggunakan layanan VPN, Anda memerlukan minimal saldo Rp 10.000.
 💰 *Minimal saldo:* Rp 10.000
 💸 *Kurang:* %s
 
-Silakan top up saldo terlebih dahulu.`, 
-			formatPrice(balance.Balance), 
+Silakan top up saldo terlebih dahulu.`,
+			formatPrice(balance.Balance),
 			formatPrice(10000-balance.Balance))
 
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -3287,7 +3289,7 @@ Ketik email Anda:`, protocolName[protocol])
 
 func handleVPNEmailInput(bot *tgbotapi.BotAPI, chatID int64, email string) {
 	email = strings.TrimSpace(email)
-	
+
 	// Basic email validation
 	if !strings.Contains(email, "@") || len(email) < 5 {
 		text := `❌ *Format Email Tidak Valid*
@@ -3341,7 +3343,7 @@ Ketik password Anda:`
 
 func handleVPNPasswordInput(bot *tgbotapi.BotAPI, chatID int64, password string) {
 	password = strings.TrimSpace(password)
-	
+
 	// Basic password validation
 	if len(password) < 6 {
 		text := `❌ *Password Terlalu Pendek*
@@ -3457,7 +3459,7 @@ Ketik jumlah hari (1-365):`
 
 	// Calculate price
 	price := service.CalculateVPNPrice(days)
-	
+
 	// Check balance
 	balance := service.GetUserBalance(chatID)
 	if balance.Balance < price {
@@ -3467,7 +3469,7 @@ Ketik jumlah hari (1-365):`
 💳 *Saldo Anda:* %s
 💸 *Kurang:* %s
 
-Silakan top up saldo terlebih dahulu.`, 
+Silakan top up saldo terlebih dahulu.`,
 			days, formatPrice(price), formatPrice(balance.Balance), formatPrice(price-balance.Balance))
 
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -3506,7 +3508,7 @@ Silakan top up saldo terlebih dahulu.`,
 💰 *Harga:* %s
 💳 *Saldo Tersisa:* %s
 
-Apakah Anda yakin ingin membeli VPN ini?`, 
+Apakah Anda yakin ingin membeli VPN ini?`,
 		protocolName[protocol], email, password, days, formatPrice(price), formatPrice(balance.Balance-price))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -3749,8 +3751,8 @@ func handleVPNConfirm(bot *tgbotapi.BotAPI, chatID int64, daysStr string) {
 
 %s
 
-🎉 VPN Anda sudah aktif dan siap digunakan!`, 
-		strings.ToUpper(protocol), vpnTx.Username, password, days, 
+🎉 VPN Anda sudah aktif dan siap digunakan!`,
+		strings.ToUpper(protocol), vpnTx.Username, password, days,
 		formatPrice(vpnTx.Price), formatPrice(balance.Balance), configText)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -3832,7 +3834,7 @@ func handleVPNDetail(bot *tgbotapi.BotAPI, chatID int64, vpnUsername string) {
 📅 *Expired:* %s
 ⏰ *Sisa:* %d hari
 
-`, strings.ToUpper(selectedVPN.Protocol), status, selectedVPN.VPNUsername, 
+`, strings.ToUpper(selectedVPN.Protocol), status, selectedVPN.VPNUsername,
 		selectedVPN.Password, selectedVPN.Server, selectedVPN.Port,
 		selectedVPN.ExpiredAt.Format("02/01/2006 15:04"), daysLeft)
 
@@ -3957,7 +3959,7 @@ Ketik jumlah hari:`
 
 	// Calculate price
 	price := service.CalculateVPNPrice(days)
-	
+
 	// Check balance
 	balance := service.GetUserBalance(chatID)
 	if balance.Balance < price {
@@ -3967,7 +3969,7 @@ Ketik jumlah hari:`
 💳 *Saldo Anda:* %s
 💸 *Kurang:* %s
 
-Silakan top up saldo terlebih dahulu.`, 
+Silakan top up saldo terlebih dahulu.`,
 			days, formatPrice(price), formatPrice(balance.Balance), formatPrice(price-balance.Balance))
 
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -4030,7 +4032,7 @@ Silakan top up saldo terlebih dahulu.`,
 💰 *Harga:* %s
 💳 *Saldo Tersisa:* %s
 
-🎉 VPN Anda telah diperpanjang dan masih aktif!`, 
+🎉 VPN Anda telah diperpanjang dan masih aktif!`,
 		vpnUsername, days, formatPrice(price), formatPrice(balance.Balance))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -4069,7 +4071,7 @@ VPN berhasil diperpanjang.`,
 // formatVPNConfig formats VPN configuration from API response
 func formatVPNConfig(protocol string, data map[string]interface{}) string {
 	var text string
-	
+
 	switch protocol {
 	case "ssh":
 		text += "🔧 *Konfigurasi SSH/SSL:*\n"
@@ -4090,7 +4092,7 @@ func formatVPNConfig(protocol string, data map[string]interface{}) string {
 				text += fmt.Sprintf("• 🌐 WebSocket Port: `%v`\n", wsPort)
 			}
 		}
-		
+
 	case "trojan":
 		text += "🔧 *Konfigurasi Trojan:*\n"
 		if server, ok := data["server"]; ok {
@@ -4121,7 +4123,7 @@ func formatVPNConfig(protocol string, data map[string]interface{}) string {
 			if serviceName, ok := config["serviceName"]; ok {
 				text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
 			}
-			
+
 			text += "\n🔗 *Connection Links:*\n"
 			if linkWs, ok := config["link_ws"]; ok {
 				text += fmt.Sprintf("• WebSocket: `%v`\n", linkWs)
@@ -4133,7 +4135,7 @@ func formatVPNConfig(protocol string, data map[string]interface{}) string {
 				text += fmt.Sprintf("• Trojan-Go: `%v`\n", linkGo)
 			}
 		}
-		
+
 	case "vless":
 		text += "🔧 *Konfigurasi VLESS:*\n"
 		if server, ok := data["server"]; ok {
@@ -4173,7 +4175,7 @@ func formatVPNConfig(protocol string, data map[string]interface{}) string {
 			if serviceName, ok := config["serviceName"]; ok {
 				text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
 			}
-			
+
 			text += "\n🔗 *Connection Links:*\n"
 			if linkTls, ok := config["link_tls"]; ok {
 				text += fmt.Sprintf("• TLS: `%v`\n", linkTls)
@@ -4185,7 +4187,7 @@ func formatVPNConfig(protocol string, data map[string]interface{}) string {
 				text += fmt.Sprintf("• gRPC: `%v`\n", linkGrpc)
 			}
 		}
-		
+
 	case "vmess":
 		text += "🔧 *Konfigurasi VMESS:*\n"
 		if server, ok := data["server"]; ok {
@@ -4222,7 +4224,7 @@ func formatVPNConfig(protocol string, data map[string]interface{}) string {
 			if serviceName, ok := config["serviceName"]; ok {
 				text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
 			}
-			
+
 			text += "\n🔗 *Connection Links:*\n"
 			if linkWs, ok := config["link_ws"]; ok {
 				text += fmt.Sprintf("• WebSocket: `%v`\n", linkWs)
@@ -4232,14 +4234,14 @@ func formatVPNConfig(protocol string, data map[string]interface{}) string {
 			}
 		}
 	}
-	
+
 	return text
 }
 
 // formatVPNConfigFromDB formats VPN configuration from database
 func formatVPNConfigFromDB(protocol string, config map[string]interface{}, uuid string) string {
 	var text string
-	
+
 	switch protocol {
 	case "ssh":
 		text += "🔧 *Konfigurasi SSH/SSL:*\n"
@@ -4252,7 +4254,7 @@ func formatVPNConfigFromDB(protocol string, config map[string]interface{}, uuid 
 		if wsPort, ok := config["ws_port"]; ok {
 			text += fmt.Sprintf("• 🌐 WebSocket Port: `%v`\n", wsPort)
 		}
-		
+
 	case "trojan":
 		text += "🔧 *Konfigurasi Trojan:*\n"
 		if uuid != "" {
@@ -4276,7 +4278,7 @@ func formatVPNConfigFromDB(protocol string, config map[string]interface{}, uuid 
 		if serviceName, ok := config["serviceName"]; ok {
 			text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
 		}
-		
+
 		text += "\n🔗 *Connection Links:*\n"
 		if linkWs, ok := config["link_ws"]; ok {
 			text += fmt.Sprintf("• WebSocket: `%v`\n", linkWs)
@@ -4287,7 +4289,7 @@ func formatVPNConfigFromDB(protocol string, config map[string]interface{}, uuid 
 		if linkGo, ok := config["link_go"]; ok {
 			text += fmt.Sprintf("• Trojan-Go: `%v`\n", linkGo)
 		}
-		
+
 	case "vless":
 		text += "🔧 *Konfigurasi VLESS:*\n"
 		if uuid != "" {
@@ -4320,7 +4322,7 @@ func formatVPNConfigFromDB(protocol string, config map[string]interface{}, uuid 
 		if serviceName, ok := config["serviceName"]; ok {
 			text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
 		}
-		
+
 		text += "\n🔗 *Connection Links:*\n"
 		if linkTls, ok := config["link_tls"]; ok {
 			text += fmt.Sprintf("• TLS: `%v`\n", linkTls)
@@ -4331,7 +4333,7 @@ func formatVPNConfigFromDB(protocol string, config map[string]interface{}, uuid 
 		if linkGrpc, ok := config["link_grpc"]; ok {
 			text += fmt.Sprintf("• gRPC: `%v`\n", linkGrpc)
 		}
-		
+
 	case "vmess":
 		text += "🔧 *Konfigurasi VMESS:*\n"
 		if uuid != "" {
@@ -4361,7 +4363,7 @@ func formatVPNConfigFromDB(protocol string, config map[string]interface{}, uuid 
 		if serviceName, ok := config["serviceName"]; ok {
 			text += fmt.Sprintf("• 🔧 Service Name: `%v`\n", serviceName)
 		}
-		
+
 		text += "\n🔗 *Connection Links:*\n"
 		if linkWs, ok := config["link_ws"]; ok {
 			text += fmt.Sprintf("• WebSocket: `%v`\n", linkWs)
@@ -4370,6 +4372,6 @@ func formatVPNConfigFromDB(protocol string, config map[string]interface{}, uuid 
 			text += fmt.Sprintf("• gRPC: `%v`\n", linkGrpc)
 		}
 	}
-	
+
 	return text
 }
